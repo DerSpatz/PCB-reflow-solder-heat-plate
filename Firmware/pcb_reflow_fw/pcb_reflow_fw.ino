@@ -59,11 +59,14 @@ enum buttons_state_t { BUTTONS_NO_PRESS, BUTTONS_BOTH_PRESS, BUTTONS_UP_PRESS, B
 // Temperature Info
 byte max_temp_array[] = {140, 150, 160, 170, 180};
 byte max_temp_index = 0;
+#define MAX_RESISTANCE 10.0
 
 // EEPROM storage locations
-#define TEMP_INDEX_ADDR 1
-#define RESISTANCE_INDEX_ADDR 2
-#define DIGITAL_TEMP_ID_ADDR 6
+#define CRC_ADDR 0
+#define FIRSTTIME_BOOT_ADDR 4
+#define TEMP_INDEX_ADDR 5
+#define RESISTANCE_INDEX_ADDR 6
+#define DIGITAL_TEMP_ID_ADDR 10
 
 // Voltage Measurement Info
 float vConvert = 52.00;
@@ -134,8 +137,8 @@ struct solder_profile_t {
 // profiles pulled from here: https://www.7pcb.com/blog/lead-free-reflow-profile.php
 #define NUM_PROFILES 2
 const static solder_profile_t profiles[NUM_PROFILES] = {
-    {.points=4, .seconds={25, 105, 115, 155}, .fraction={.65, .78, .81, 1.00}}, 
-    {.points=2, .seconds={162.0, 202.0}, .fraction={.95, 1.00}}};
+    {.points = 4, .seconds = {25, 105, 115, 155}, .fraction = {.65, .78, .81, 1.00}},
+    {.points = 2, .seconds = {162.0, 202.0}, .fraction = {.95, 1.00}}};
 
 // temperature must be within this range to move on to next step
 #define TARGET_TEMP_THRESHOLD 5.0
@@ -178,11 +181,13 @@ void setup() {
     pinMode(DNSW_PIN, INPUT);
     pinMode(TEMP_PIN, INPUT);
     pinMode(VCC_PIN, INPUT);
+    pinMode(13, OUTPUT);
+    digitalWrite(13, LOW);
 
     Serial.begin(115200);
 
     // Pull saved values from EEPROM
-    max_temp_index = EEPROM.read(TEMP_INDEX_ADDR) % sizeof(max_temp_array);
+    max_temp_index = getMaxTempIndex();
 
     // Enable Fast PWM with no prescaler
     setFastPwm();
@@ -191,14 +196,52 @@ void setup() {
     debugprintln("Showing startup");
     showLogo();
 
-    debugprintln("Checking sensors"); 
+    debugprintln("Checking sensors");
     // check onewire TEMP_PIN sensors
     setupSensors();
+
+    debugprintln("Checking first boot");
+    if (isFirstBoot() || !validateCRC()) {
+        doSetup();
+    }
 
     debugprintln("Entering main menu");
     // Go to main menu
     mainMenu();
+}
 
+void updateCRC() {
+    uint32_t new_crc = eepromCRC();
+    setCRC(new_crc);
+}
+
+bool validateCRC() {
+    uint32_t stored_crc;
+    EEPROM.get(CRC_ADDR, stored_crc);
+    uint32_t calculated_crc = eepromCRC();
+    debugprint("got CRCs, stored: ");
+    debugprint(stored_crc);
+    debugprint(", calculated: ");
+    debugprintln(calculated_crc);
+    return stored_crc == calculated_crc;
+}
+
+void setCRC(uint32_t new_crc) { EEPROM.put(CRC_ADDR, new_crc); }
+
+uint32_t eepromCRC(void) {
+    static const uint32_t crc_table[16] = {0x00000000, 0x1db71064, 0x3b6e20c8, 0x26d930ac,
+                                           0x76dc4190, 0x6b6b51f4, 0x4db26158, 0x5005713c,
+                                           0xedb88320, 0xf00f9344, 0xd6d6a3e8, 0xcb61b38c,
+                                           0x9b64c2b0, 0x86d3d2d4, 0xa00ae278, 0xbdbdf21c};
+    uint32_t crc = ~0L;
+    // Skip first 4 bytes of EEPROM as thats where we store the CRC
+    for (int index = 4; index < EEPROM.length(); ++index) {
+        crc = crc_table[(crc ^ EEPROM[index]) & 0x0f] ^ (crc >> 4);
+        crc = crc_table[(crc ^ (EEPROM[index] >> 4)) & 0x0f] ^ (crc >> 4);
+        crc = ~crc;
+    }
+
+    return crc;
 }
 
 inline void setupSensors() {
@@ -216,24 +259,99 @@ inline void setFastPwm() {
     TCCR2B = _BV(CS20);
 }
 
-void showLogo() {
-    display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS);
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setTextColor(SSD1306_WHITE);
-    display.setCursor(0, 0);
-    display.drawBitmap(0, 0, logo, logo_width, logo_height, SSD1306_WHITE);
-    display.setCursor(80, 16);
-    display.print(F("S/W V"));
-    display.print(sw, 1);
-    display.setCursor(80, 24);
-    display.print(F("H/W V"));
-    display.print(hw, 1);
-    display.display();
-    delay(2000);
+inline bool isFirstBoot() {
+    uint8_t first_boot = EEPROM.read(FIRSTTIME_BOOT_ADDR);
+    debugprint("Got first boot flag: ");
+    debugprintln(first_boot);
+    return first_boot != 1;
 }
 
-void mainMenu() {
+inline void setFirstBoot() {
+    EEPROM.write(FIRSTTIME_BOOT_ADDR, 1);
+    updateCRC();
+}
+
+inline float getResistance() {
+    float f;
+    return EEPROM.get(RESISTANCE_INDEX_ADDR, f);
+    return f;
+}
+
+inline void setResistance(float resistance) {
+    EEPROM.put(TEMP_INDEX_ADDR, resistance);
+    updateCRC();
+}
+
+inline void setMaxTempIndex(int index) {
+    EEPROM.update(TEMP_INDEX_ADDR, index);
+    updateCRC();
+}
+
+inline int getMaxTempIndex(void) { return EEPROM.read(TEMP_INDEX_ADDR) % sizeof(max_temp_array); }
+
+void showLogo() {
+    unsigned long start_time = millis();
+    display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS);
+    while(start_time + 2000 > millis()) {
+        display.clearDisplay();
+        display.setTextSize(1);
+        display.setTextColor(SSD1306_WHITE);
+        display.setCursor(0, 0);
+        display.drawBitmap(0, 0, logo, logo_width, logo_height, SSD1306_WHITE);
+        display.setCursor(80, 16);
+        display.print(F("S/W V"));
+        display.print(sw, 1);
+        display.setCursor(80, 24);
+        display.print(F("H/W V"));
+        display.print(hw, 1);
+        display.display();
+        buttons_state_t cur_button = getButtonsState();
+        if(cur_button == BUTTONS_BOTH_PRESS) {
+            doSetup();
+            return;
+        }
+    }
+}
+
+inline void doSetup() {
+    debugprintln("Performing setup");
+    // TODO(HEIDT) show an info screen if we're doing firstime setup or if memory is corrupted
+
+    getColdResistance();
+    // TODO(HEIDT) do a temperature module setup here
+
+    setFirstBoot();
+}
+
+inline void getColdResistance() {
+    float resistance = 0.9;
+    while (1) {
+        clearMainMenu();
+        display.setCursor(3, 4);
+        display.print(F("Resistance"));
+        display.drawLine(3, 12, 79, 12, SSD1306_WHITE);
+        display.setCursor(3, 14);
+        display.print(F("UP/DN: change"));
+        display.setCursor(3, 22);
+        display.print(F("BOTH: choose"));
+        buttons_state_t button = getButtonsState();
+        if (button == BUTTONS_UP_PRESS) {
+            resistance += 0.1;
+        } else if (button == BUTTONS_DN_PRESS) {
+            resistance -= 0.1;
+        } else if (button == BUTTONS_BOTH_PRESS) {
+            setResistance(resistance);
+            return;
+        }
+        resistance = constrain(resistance, 0, MAX_RESISTANCE);
+
+        display.setCursor(90, 12);
+        display.print(resistance);
+        display.display();
+    }
+}
+
+inline void mainMenu() {
     // Debounce
     while (!digitalRead(UPSW_PIN) || !digitalRead(DNSW_PIN))
         ;
@@ -277,7 +395,7 @@ void mainMenu() {
             if (max_temp_index < sizeof(max_temp_array) - 1) {
                 max_temp_index++;
                 debugprintln("incrementing max temp");
-                EEPROM.update(TEMP_INDEX_ADDR, max_temp_index);
+                setMaxTempIndex(max_temp_index);
             }
             cur_state = MENU_IDLE;
         } break;
@@ -285,7 +403,7 @@ void mainMenu() {
             if (max_temp_index > 0) {
                 max_temp_index--;
                 debugprintln("decrementing max temp");
-                EEPROM.update(TEMP_INDEX_ADDR, max_temp_index);
+                setMaxTempIndex(max_temp_index);
             }
             cur_state = MENU_IDLE;
         } break;
@@ -301,6 +419,8 @@ void mainMenu() {
 
 // TODO(HEIDT) change to a down-up model or we'll loop forever in these cases
 buttons_state_t getButtonsState() {
+    const unsigned long timeout = 1000;
+
     buttons_state_t state = BUTTONS_NO_PRESS;
     if (digitalRead(UPSW_PIN) && digitalRead(DNSW_PIN)) {
         state = BUTTONS_NO_PRESS;
@@ -308,17 +428,20 @@ buttons_state_t getButtonsState() {
         delay(100);
         if (!digitalRead(UPSW_PIN) && !digitalRead(DNSW_PIN)) {
             state = BUTTONS_BOTH_PRESS;
-        } else if (digitalRead(UPSW_PIN)) {
+        } else if (!digitalRead(UPSW_PIN)) {
             state = BUTTONS_UP_PRESS;
         } else {
             state = BUTTONS_DN_PRESS;
         }
     }
 
-    // wait for up on both switches
-    // TODO(HEIDT) holding down switches will block execution flow, address
-    while (!digitalRead(UPSW_PIN) || !digitalRead(DNSW_PIN))
-        ;
+    // wait for up on both switches, timeout if not released within a second
+    unsigned long start_time = millis();
+    while (!digitalRead(UPSW_PIN) || !digitalRead(DNSW_PIN)) {
+        if (millis() > start_time + timeout) {
+            return BUTTONS_NO_PRESS;
+        }
+    }
 
     return state;
 }
@@ -363,7 +486,6 @@ inline void displayProfileRight(int8_t cur_profile) {
         display.drawLine(cur_x, cur_y, x_next, y_next, SSD1306_WHITE);
         cur_x = x_next;
         cur_y = y_next;
-
     }
     // draw down to finish TEMP_PIN
     display.drawLine(cur_x, cur_y, SCREEN_WIDTH - 2, 30, SSD1306_WHITE);
@@ -464,7 +586,7 @@ bool heat(byte max_temp, int profile_index) {
         float time_into_step = ((float)millis() / 1000.0) - (float)step_start_time;
         float target_temp = min(
             ((goal_temp - start_temp) * (time_into_step / step_runtime)) + start_temp, goal_temp);
-        
+
         // TODO(HEIDT) PID for a ramp will always lag, other options may be better
         stepPID(target_temp, t, last_temp, time_into_step - last_time);
         last_time = time_into_step;
