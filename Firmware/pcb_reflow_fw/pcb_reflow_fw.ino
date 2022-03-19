@@ -60,6 +60,8 @@ enum buttons_state_t { BUTTONS_NO_PRESS, BUTTONS_BOTH_PRESS, BUTTONS_UP_PRESS, B
 byte max_temp_array[] = {140, 150, 160, 170, 180};
 byte max_temp_index = 0;
 #define MAX_RESISTANCE 10.0
+float bed_resistance = 0.9;
+#define MAX_AMPERAGE 0.5
 
 // EEPROM storage locations
 #define CRC_ADDR 0
@@ -186,11 +188,9 @@ void setup() {
 
     Serial.begin(115200);
 
-    // Pull saved values from EEPROM
-    max_temp_index = getMaxTempIndex();
-
     // Enable Fast PWM with no prescaler
     setFastPwm();
+    setVREF();
 
     // Start-up Diplay
     debugprintln("Showing startup");
@@ -204,6 +204,10 @@ void setup() {
     if (isFirstBoot() || !validateCRC()) {
         doSetup();
     }
+
+    // Pull saved values from EEPROM
+    max_temp_index = getMaxTempIndex();
+    bed_resistance = getResistance();
 
     debugprintln("Entering main menu");
     // Go to main menu
@@ -259,6 +263,10 @@ inline void setFastPwm() {
     TCCR2B = _BV(CS20);
 }
 
+inline void setVREF() {
+    // TODO(HEIDT) use 1.1V vref and confirm the hardware supports it for all analog reads
+}
+
 inline bool isFirstBoot() {
     uint8_t first_boot = EEPROM.read(FIRSTTIME_BOOT_ADDR);
     debugprint("Got first boot flag: ");
@@ -306,6 +314,7 @@ void showLogo() {
         display.print(hw, 1);
         display.display();
         buttons_state_t cur_button = getButtonsState();
+        // If we press both buttons during boot, we'll enter the setup process
         if(cur_button == BUTTONS_BOTH_PRESS) {
             doSetup();
             return;
@@ -317,13 +326,13 @@ inline void doSetup() {
     debugprintln("Performing setup");
     // TODO(HEIDT) show an info screen if we're doing firstime setup or if memory is corrupted
 
-    getColdResistance();
+    getResistanceFromUser();
     // TODO(HEIDT) do a temperature module setup here
 
     setFirstBoot();
 }
 
-inline void getColdResistance() {
+inline void getResistanceFromUser() {
     float resistance = 0.9;
     while (1) {
         clearMainMenu();
@@ -417,7 +426,6 @@ inline void mainMenu() {
     }
 }
 
-// TODO(HEIDT) change to a down-up model or we'll loop forever in these cases
 buttons_state_t getButtonsState() {
     const unsigned long timeout = 1000;
 
@@ -565,22 +573,30 @@ bool heat(byte max_temp, int profile_index) {
     error_I = 0;
 
     while (1) {
-        // Cancel heat
-        if (getButtonsState() != BUTTONS_NO_PRESS) {
+        // Cancel heat, don't even wait for uppress so we don't risk missing it during the loop
+        if (!digitalRead(DNSW_PIN) || !digitalRead(UPSW_PIN)) {
             analogWrite(MOSFET_PIN, 0);
+            debugprintln("cancelled");
             return 0;
         }
 
         // Check Heating not taken more than 8 minutes
         if (millis() / 1000 > profile_max_time) {
             analogWrite(MOSFET_PIN, 0);
+            debugprintln("exceeded time");
             cancelledTimer();
             return 0;
         }
 
         // Measure Values
+        // TODO(HEIDT) getting the temperature from the digital sensors is by far the slowest part of this loop.
+        // figure out an approach that allows control faster than sensing
         t = getTemp();
         v = getVolts();
+        float max_possible_amperage = v / bed_resistance;
+        // TODO(HEIDT) approximate true resistance based on cold resistance and temperature
+        int min_PWM = (int)(((MAX_AMPERAGE * bed_resistance) / v) * 255);
+        min_PWM = constrain(min_PWM, 0, 255);
 
         // Determine what target temp is and PID to it
         float time_into_step = ((float)millis() / 1000.0) - (float)step_start_time;
@@ -588,7 +604,7 @@ bool heat(byte max_temp, int profile_index) {
             ((goal_temp - start_temp) * (time_into_step / step_runtime)) + start_temp, goal_temp);
 
         // TODO(HEIDT) PID for a ramp will always lag, other options may be better
-        stepPID(target_temp, t, last_temp, time_into_step - last_time);
+        stepPID(target_temp, t, last_temp, time_into_step - last_time, min_PWM);
         last_time = time_into_step;
 
         // if we finish the step timewise
@@ -615,20 +631,16 @@ bool heat(byte max_temp, int profile_index) {
     }
 }
 
-void stepPID(float target_temp, float current_temp, float last_temp, float dt) {
+void stepPID(float target_temp, float current_temp, float last_temp, float dt, int min_pwm) {
     float error = target_temp - current_temp;
     float D = (current_temp - last_temp) / dt;
 
     error_I += error * dt * kI;
     error_I = constrain(error_I, -I_clip, I_clip);
 
-    float PWM = error * kP + D * kD + error_I;
-    if (PWM > 200) {
-        PWM = 200;
-    }
-    if (PWM < 0) {
-        PWM = 0;
-    }
+    // PWM is inverted so 0 duty is 100% power
+    float PWM = 255.0 - (error * kP + D * kD + error_I);
+    PWM = constrain(PWM, min_pwm, 255);
 
     debugprintln("PID");
     debugprintln(error);
@@ -678,18 +690,11 @@ void cancelledPB() { // Cancelled via push button
     display.drawRoundRect(22, 0, 84, 32, 2, SSD1306_WHITE);
     display.setCursor(25, 4);
     display.print(F("  CANCELLED"));
+    display.display();
     delay(2000);
-
-    // Wait to return on any button press
-    while (getButtonsState() == BUTTONS_NO_PRESS)
-        ;
 }
 
 void cancelledTimer() { // Cancelled via 5 minute Time Limit
-    // Debounce
-    while (!digitalRead(UPSW_PIN) || !digitalRead(DNSW_PIN)) {
-    }
-
     // Initiate Swap Display
     int x = 0;   // Display change counter
     int y = 150; // Display change max (modulused below)
@@ -735,10 +740,6 @@ void cancelledTimer() { // Cancelled via 5 minute Time Limit
 }
 
 void coolDown() {
-    // Debounce
-    while (!digitalRead(UPSW_PIN) || !digitalRead(DNSW_PIN)) {
-    }
-
     float t = getTemp(); // Used to store current temperature
 
     // Wait to return on any button press, or TEMP_PIN below threshold
