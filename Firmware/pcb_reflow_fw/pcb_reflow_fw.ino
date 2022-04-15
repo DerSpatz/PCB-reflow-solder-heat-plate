@@ -47,21 +47,34 @@ static const PROGMEM float sw = 2.0;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1); // Create Display
 
 // Pin Definitions
-#define MOSFET_PIN 3
-#define UPSW_PIN 6
-#define DNSW_PIN 5
-#define TEMP_PIN 16 // A2
-#define VCC_PIN 14  // A0
+#define MOSFET_PIN     PIN_PC3
+#define UPSW_PIN       PIN_PF3
+#define DNSW_PIN       PIN_PD4
+#define TEMP_PIN       PIN_PF2 // A2
+#define VCC_PIN        PIN_PF4  // A0
+#define LED_GREEN_PIN  PIN_PC4
+#define LED_RED_PIN    PIN_PC5
+#define ONE_WIRE_BUS   PIN_PE1
+
+#define MOSFET_PIN_OFF        255
 
 enum menu_state_t { MENU_IDLE, MENU_SELECT_PROFILE, MENU_HEAT, MENU_INC_TEMP, MENU_DEC_TEMP };
 enum buttons_state_t { BUTTONS_NO_PRESS, BUTTONS_BOTH_PRESS, BUTTONS_UP_PRESS, BUTTONS_DN_PRESS };
+enum single_button_state_t {BUTTON_PRESSED, BUTTON_RELEASED, BUTTON_NO_ACTION};
+
+// Button interrupt state
+volatile single_button_state_t up_button_state = BUTTON_NO_ACTION;
+volatile single_button_state_t dn_button_state = BUTTON_NO_ACTION;
+volatile unsigned long up_state_change_time = 0;
+volatile unsigned long down_state_change_time = 0;
+
 
 // Temperature Info
 byte max_temp_array[] = {140, 150, 160, 170, 180};
 byte max_temp_index = 0;
 #define MAX_RESISTANCE 10.0
 float bed_resistance = 0.9;
-#define MAX_AMPERAGE 0.5
+#define MAX_AMPERAGE 5.0
 
 // EEPROM storage locations
 #define CRC_ADDR 0
@@ -146,14 +159,13 @@ const static solder_profile_t profiles[NUM_PROFILES] = {
 #define TARGET_TEMP_THRESHOLD 5.0
 
 // PID values
-float kI = 0.1;
+float kI = 0.2;
 float kD = 0.25;
-float kP = 0.5;
-float I_clip = 50;
+float kP = 8.0;
+float I_clip = 150;
 float error_I = 0;
 
 // Optional temperature sensor
-#define ONE_WIRE_BUS 2
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 int sensor_count = 0;
@@ -174,19 +186,34 @@ void inline heatAnimate(int &x, int &y, float v, float t, float target_temp);
 
 // -------------------- Function definitions ----------------------------------
 
+void dnsw_change_isr() {
+    dn_button_state = BUTTON_PRESSED;
+    down_state_change_time = millis();
+}
+
+void upsw_change_isr() {
+    up_button_state = BUTTON_PRESSED;
+    up_state_change_time = millis();
+}
+
+
 void setup() {
 
     // Pin Direction control
     pinMode(MOSFET_PIN, OUTPUT);
-    digitalWrite(MOSFET_PIN, LOW);
     pinMode(UPSW_PIN, INPUT);
     pinMode(DNSW_PIN, INPUT);
     pinMode(TEMP_PIN, INPUT);
     pinMode(VCC_PIN, INPUT);
-    pinMode(13, OUTPUT);
-    digitalWrite(13, LOW);
+    pinMode(LED_GREEN_PIN, OUTPUT);
+    
+    digitalWrite(LED_GREEN_PIN, HIGH);
+    analogWrite(MOSFET_PIN, 255);  // VERY IMPORTANT, DONT CHANGE!
 
-    Serial.begin(115200);
+    attachInterrupt(DNSW_PIN, dnsw_change_isr, FALLING);
+    attachInterrupt(UPSW_PIN, upsw_change_isr, FALLING);
+    
+    Serial.begin(9600);
 
     // Enable Fast PWM with no prescaler
     setFastPwm();
@@ -259,12 +286,11 @@ inline void setupSensors() {
 }
 
 inline void setFastPwm() {
-    TCCR2A = _BV(COM2A1) | _BV(COM2B1) | _BV(WGM21) | _BV(WGM20);
-    TCCR2B = _BV(CS20);
+    analogWriteFrequency(64);
 }
 
 inline void setVREF() {
-    // TODO(HEIDT) use 1.1V vref and confirm the hardware supports it for all analog reads
+    analogReference(INTERNAL1V5);
 }
 
 inline bool isFirstBoot() {
@@ -286,7 +312,7 @@ inline float getResistance() {
 }
 
 inline void setResistance(float resistance) {
-    EEPROM.put(TEMP_INDEX_ADDR, resistance);
+    EEPROM.put(RESISTANCE_INDEX_ADDR, resistance);
     updateCRC();
 }
 
@@ -362,8 +388,6 @@ inline void getResistanceFromUser() {
 
 inline void mainMenu() {
     // Debounce
-    while (!digitalRead(UPSW_PIN) || !digitalRead(DNSW_PIN))
-        ;
     menu_state_t cur_state = MENU_IDLE;
 
     int x = 0;   // Display change counter
@@ -373,7 +397,6 @@ inline void mainMenu() {
     while (1) {
         switch (cur_state) {
         case MENU_IDLE: {
-            analogWrite(MOSFET_PIN, 0); // Ensure MOSFET off
             clearMainMenu();
             buttons_state_t cur_button = getButtonsState();
 
@@ -426,30 +449,42 @@ inline void mainMenu() {
     }
 }
 
+#define BUTTON_PRESS_TIME 50
 buttons_state_t getButtonsState() {
-    const unsigned long timeout = 1000;
+    single_button_state_t button_dn;
+    single_button_state_t button_up;
+    unsigned long button_dn_time;
+    unsigned long button_up_time;
 
+    noInterrupts();
+    button_dn = dn_button_state;
+    button_up = up_button_state;
+    button_dn_time = down_state_change_time;
+    button_up_time = up_state_change_time;
+    interrupts();
+    
+    unsigned long cur_time = millis();
     buttons_state_t state = BUTTONS_NO_PRESS;
-    if (digitalRead(UPSW_PIN) && digitalRead(DNSW_PIN)) {
-        state = BUTTONS_NO_PRESS;
-    } else {
-        delay(100);
-        if (!digitalRead(UPSW_PIN) && !digitalRead(DNSW_PIN)) {
-            state = BUTTONS_BOTH_PRESS;
-        } else if (!digitalRead(UPSW_PIN)) {
-            state = BUTTONS_UP_PRESS;
-        } else {
-            state = BUTTONS_DN_PRESS;
-        }
-    }
 
-    // wait for up on both switches, timeout if not released within a second
-    unsigned long start_time = millis();
-    while (!digitalRead(UPSW_PIN) || !digitalRead(DNSW_PIN)) {
-        if (millis() > start_time + timeout) {
-            return BUTTONS_NO_PRESS;
+    if(button_dn == BUTTON_PRESSED && button_up == BUTTON_PRESSED && abs(button_dn_time - button_up_time) < BUTTON_PRESS_TIME) {
+        if(cur_time - button_dn_time > BUTTON_PRESS_TIME && cur_time - button_up_time > BUTTON_PRESS_TIME) {
+            state = BUTTONS_BOTH_PRESS;
+            noInterrupts();
+            dn_button_state = BUTTON_NO_ACTION;
+            up_button_state = BUTTON_NO_ACTION;
+            interrupts();
         }
-    }
+    } else if(button_up == BUTTON_PRESSED && cur_time - button_up_time> BUTTON_PRESS_TIME) {
+            state = BUTTONS_UP_PRESS;
+            noInterrupts();
+            up_button_state = BUTTON_NO_ACTION;
+            interrupts();
+    } else if(button_dn == BUTTON_PRESSED && cur_time - button_dn_time> BUTTON_PRESS_TIME) {
+            state = BUTTONS_DN_PRESS;
+            noInterrupts();
+            dn_button_state = BUTTON_NO_ACTION;
+            interrupts();
+    } 
 
     return state;
 }
@@ -546,10 +581,6 @@ inline void showHeatMenu(byte max_temp) {
 }
 
 bool heat(byte max_temp, int profile_index) {
-    // Debounce
-    while (!digitalRead(UPSW_PIN) || !digitalRead(DNSW_PIN)) {
-    }
-
     // Heating Display
     showHeatMenu(max_temp);
     delay(3000);
@@ -568,21 +599,21 @@ bool heat(byte max_temp, int profile_index) {
     float start_temp = getTemp();
     float goal_temp = profiles[profile_index].fraction[0] * max_temp;
     float step_runtime = profiles[profile_index].seconds[0];
-    float last_time = step_start_time;
+    float last_time = 0;
     float last_temp = getTemp();
     error_I = 0;
 
     while (1) {
         // Cancel heat, don't even wait for uppress so we don't risk missing it during the loop
-        if (!digitalRead(DNSW_PIN) || !digitalRead(UPSW_PIN)) {
-            analogWrite(MOSFET_PIN, 0);
+        if (getButtonsState() != BUTTONS_NO_PRESS) {
+            analogWrite(MOSFET_PIN, MOSFET_PIN_OFF);
             debugprintln("cancelled");
             return 0;
         }
 
         // Check Heating not taken more than 8 minutes
         if (millis() / 1000 > profile_max_time) {
-            analogWrite(MOSFET_PIN, 0);
+            analogWrite(MOSFET_PIN, MOSFET_PIN_OFF);
             debugprintln("exceeded time");
             cancelledTimer();
             return 0;
@@ -595,8 +626,12 @@ bool heat(byte max_temp, int profile_index) {
         v = getVolts();
         float max_possible_amperage = v / bed_resistance;
         // TODO(HEIDT) approximate true resistance based on cold resistance and temperature
-        int min_PWM = (int)(((MAX_AMPERAGE * bed_resistance) / v) * 255);
+        float vmax = (MAX_AMPERAGE * bed_resistance);
+        int min_PWM = 255 - ((vmax * 255.0) / v);
         min_PWM = constrain(min_PWM, 0, 255);
+        debugprint("Min PWM: ");
+        debugprintln(min_PWM);
+        debugprintln(bed_resistance);
 
         // Determine what target temp is and PID to it
         float time_into_step = ((float)millis() / 1000.0) - (float)step_start_time;
@@ -615,7 +650,7 @@ bool heat(byte max_temp, int profile_index) {
                 current_step++;
                 // if that was the last step, we're done!
                 if (current_step == profiles[profile_index].points) {
-                    analogWrite(MOSFET_PIN, 0);
+                    analogWrite(MOSFET_PIN, MOSFET_PIN_OFF);
                     return 1;
                 }
                 // otherwise, get the next goal temperature and runtime, and do the process again
@@ -643,6 +678,7 @@ void stepPID(float target_temp, float current_temp, float last_temp, float dt, i
     PWM = constrain(PWM, min_pwm, 255);
 
     debugprintln("PID");
+    debugprintln(dt);
     debugprintln(error);
     debugprintln(PWM);
     debugprintln(error_I);
@@ -743,7 +779,7 @@ void coolDown() {
     float t = getTemp(); // Used to store current temperature
 
     // Wait to return on any button press, or TEMP_PIN below threshold
-    while (digitalRead(UPSW_PIN) && digitalRead(DNSW_PIN) && t > 45.00) {
+    while (getButtonsState() == BUTTONS_NO_PRESS && t > 45.00) {
         display.clearDisplay();
         display.drawRoundRect(22, 0, 84, 32, 2, SSD1306_WHITE);
         display.setCursor(25, 4);
@@ -772,10 +808,6 @@ void coolDown() {
 }
 
 void completed() {
-    // Debounce
-    while (!digitalRead(UPSW_PIN) || !digitalRead(DNSW_PIN)) {
-    }
-
     // Update Display
     display.clearDisplay();
     display.drawRoundRect(22, 0, 84, 32, 2, SSD1306_WHITE);
@@ -791,22 +823,36 @@ void completed() {
     display.display();
 
     // Wait to return on any button press
-    while (digitalRead(UPSW_PIN) && digitalRead(DNSW_PIN)) {
+    while (getButtonsState() == BUTTONS_NO_PRESS) {
     }
 }
 
 float getTemp() {
+    debugprint("Temps: ");
     float t = 0;
     for (byte i = 0; i < 100; i++) { // Poll TEMP_PIN reading 100 times
         t = t + analogRead(TEMP_PIN);
     }
-    t = ((t / 100) * -1.46) + 434;
+    t /= 100.0;  // average
+    t *= 1.5/1024.0; // voltage
+    // conversion to temp, consult datasheet:
+    // https://www.ti.com/document-viewer/LMT85/datasheet/detailed-description#snis1681040
+    // this is optimized for 25C to 150C
+    // TODO(HEIDT) this is linearized and innacurate, could probably use the nonlinear
+    // functions without much overhead.
+    t = (t - 1.365)/((.301 - 1.365)/(150.0-25.0)) + 20.0;
+    debugprint(t);
+    debugprint(" ");
 
     // return the maximum of all the temperature sensors for safety
     sensors.requestTemperatures();
     for (int i = 0; i < sensor_count; i++) {
-        t = max(t, sensors.getTempC(temp_addresses[i]));
+        float temp_in = sensors.getTempC(temp_addresses[i]);
+        debugprint(temp_in);
+        debugprint(" ");
+        t = max(t, temp_in);
     }
+    debugprintln();
     return t;
 }
 
@@ -815,7 +861,13 @@ float getVolts() {
     for (byte i = 0; i < 20; i++) { // Poll Voltage reading 20 times
         v = v + analogRead(VCC_PIN);
     }
-    return v / 20 / vConvert; // Average, convert to V, and return
+    v /= 20;
+
+    float vin = (v / 1023.0)*1.5;
+    debugprint("voltage at term: ");
+    debugprintln(vin);
+    vin = (vin / 0.090981) + 0.3;
+    return vin;
 }
 
 void loop() {
