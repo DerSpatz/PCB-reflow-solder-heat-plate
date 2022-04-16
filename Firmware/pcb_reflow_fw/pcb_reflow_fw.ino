@@ -75,6 +75,7 @@ byte max_temp_index = 0;
 #define MAX_RESISTANCE 10.0
 float bed_resistance = 0.9;
 #define MAX_AMPERAGE 5.0
+#define PWM_VOLTAGE_SCALAR 5.0
 
 // EEPROM storage locations
 #define CRC_ADDR 0
@@ -626,7 +627,7 @@ bool heat(byte max_temp, int profile_index) {
         v = getVolts();
         float max_possible_amperage = v / bed_resistance;
         // TODO(HEIDT) approximate true resistance based on cold resistance and temperature
-        float vmax = (MAX_AMPERAGE * bed_resistance);
+        float vmax = (MAX_AMPERAGE * bed_resistance) * PWM_VOLTAGE_SCALAR;
         int min_PWM = 255 - ((vmax * 255.0) / v);
         min_PWM = constrain(min_PWM, 0, 255);
         debugprint("Min PWM: ");
@@ -654,8 +655,9 @@ bool heat(byte max_temp, int profile_index) {
                     return 1;
                 }
                 // otherwise, get the next goal temperature and runtime, and do the process again
+                last_time = 0.0;
                 start_temp = t;
-                goal_temp = profiles[profile_index].fraction[current_step];
+                goal_temp = profiles[profile_index].fraction[current_step] * max_temp;
                 step_runtime = profiles[profile_index].fraction[current_step] -
                                profiles[profile_index].fraction[current_step - 1];
                 step_start_time = millis() / 1000.0;
