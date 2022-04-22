@@ -47,27 +47,26 @@ static const PROGMEM float sw = 2.0;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1); // Create Display
 
 // Pin Definitions
-#define MOSFET_PIN     PIN_PC3
-#define UPSW_PIN       PIN_PF3
-#define DNSW_PIN       PIN_PD4
-#define TEMP_PIN       PIN_PF2 // A2
-#define VCC_PIN        PIN_PF4  // A0
-#define LED_GREEN_PIN  PIN_PC4
-#define LED_RED_PIN    PIN_PC5
-#define ONE_WIRE_BUS   PIN_PE1
+#define MOSFET_PIN PIN_PC3
+#define UPSW_PIN PIN_PF3
+#define DNSW_PIN PIN_PD4
+#define TEMP_PIN PIN_PF2 // A2
+#define VCC_PIN PIN_PF4  // A0
+#define LED_GREEN_PIN PIN_PC4
+#define LED_RED_PIN PIN_PC5
+#define ONE_WIRE_BUS PIN_PE1
 
-#define MOSFET_PIN_OFF        255
+#define MOSFET_PIN_OFF 255
 
 enum menu_state_t { MENU_IDLE, MENU_SELECT_PROFILE, MENU_HEAT, MENU_INC_TEMP, MENU_DEC_TEMP };
 enum buttons_state_t { BUTTONS_NO_PRESS, BUTTONS_BOTH_PRESS, BUTTONS_UP_PRESS, BUTTONS_DN_PRESS };
-enum single_button_state_t {BUTTON_PRESSED, BUTTON_RELEASED, BUTTON_NO_ACTION};
+enum single_button_state_t { BUTTON_PRESSED, BUTTON_RELEASED, BUTTON_NO_ACTION };
 
 // Button interrupt state
 volatile single_button_state_t up_button_state = BUTTON_NO_ACTION;
 volatile single_button_state_t dn_button_state = BUTTON_NO_ACTION;
 volatile unsigned long up_state_change_time = 0;
 volatile unsigned long down_state_change_time = 0;
-
 
 // Temperature Info
 byte max_temp_array[] = {140, 150, 160, 170, 180};
@@ -197,7 +196,6 @@ void upsw_change_isr() {
     up_state_change_time = millis();
 }
 
-
 void setup() {
 
     // Pin Direction control
@@ -207,13 +205,13 @@ void setup() {
     pinMode(TEMP_PIN, INPUT);
     pinMode(VCC_PIN, INPUT);
     pinMode(LED_GREEN_PIN, OUTPUT);
-    
+
     digitalWrite(LED_GREEN_PIN, HIGH);
-    analogWrite(MOSFET_PIN, 255);  // VERY IMPORTANT, DONT CHANGE!
+    analogWrite(MOSFET_PIN, 255); // VERY IMPORTANT, DONT CHANGE!
 
     attachInterrupt(DNSW_PIN, dnsw_change_isr, FALLING);
     attachInterrupt(UPSW_PIN, upsw_change_isr, FALLING);
-    
+
     Serial.begin(9600);
 
     // Enable Fast PWM with no prescaler
@@ -286,13 +284,9 @@ inline void setupSensors() {
     }
 }
 
-inline void setFastPwm() {
-    analogWriteFrequency(64);
-}
+inline void setFastPwm() { analogWriteFrequency(64); }
 
-inline void setVREF() {
-    analogReference(INTERNAL1V5);
-}
+inline void setVREF() { analogReference(INTERNAL1V5); }
 
 inline bool isFirstBoot() {
     uint8_t first_boot = EEPROM.read(FIRSTTIME_BOOT_ADDR);
@@ -327,7 +321,7 @@ inline int getMaxTempIndex(void) { return EEPROM.read(TEMP_INDEX_ADDR) % sizeof(
 void showLogo() {
     unsigned long start_time = millis();
     display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS);
-    while(start_time + 2000 > millis()) {
+    while (start_time + 2000 > millis()) {
         display.clearDisplay();
         display.setTextSize(1);
         display.setTextColor(SSD1306_WHITE);
@@ -342,7 +336,7 @@ void showLogo() {
         display.display();
         buttons_state_t cur_button = getButtonsState();
         // If we press both buttons during boot, we'll enter the setup process
-        if(cur_button == BUTTONS_BOTH_PRESS) {
+        if (cur_button == BUTTONS_BOTH_PRESS) {
             doSetup();
             return;
         }
@@ -463,29 +457,31 @@ buttons_state_t getButtonsState() {
     button_dn_time = down_state_change_time;
     button_up_time = up_state_change_time;
     interrupts();
-    
+
     unsigned long cur_time = millis();
     buttons_state_t state = BUTTONS_NO_PRESS;
 
-    if(button_dn == BUTTON_PRESSED && button_up == BUTTON_PRESSED && abs(button_dn_time - button_up_time) < BUTTON_PRESS_TIME) {
-        if(cur_time - button_dn_time > BUTTON_PRESS_TIME && cur_time - button_up_time > BUTTON_PRESS_TIME) {
+    if (button_dn == BUTTON_PRESSED && button_up == BUTTON_PRESSED &&
+        abs(button_dn_time - button_up_time) < BUTTON_PRESS_TIME) {
+        if (cur_time - button_dn_time > BUTTON_PRESS_TIME &&
+            cur_time - button_up_time > BUTTON_PRESS_TIME) {
             state = BUTTONS_BOTH_PRESS;
             noInterrupts();
             dn_button_state = BUTTON_NO_ACTION;
             up_button_state = BUTTON_NO_ACTION;
             interrupts();
         }
-    } else if(button_up == BUTTON_PRESSED && cur_time - button_up_time> BUTTON_PRESS_TIME) {
-            state = BUTTONS_UP_PRESS;
-            noInterrupts();
-            up_button_state = BUTTON_NO_ACTION;
-            interrupts();
-    } else if(button_dn == BUTTON_PRESSED && cur_time - button_dn_time> BUTTON_PRESS_TIME) {
-            state = BUTTONS_DN_PRESS;
-            noInterrupts();
-            dn_button_state = BUTTON_NO_ACTION;
-            interrupts();
-    } 
+    } else if (button_up == BUTTON_PRESSED && cur_time - button_up_time > BUTTON_PRESS_TIME) {
+        state = BUTTONS_UP_PRESS;
+        noInterrupts();
+        up_button_state = BUTTON_NO_ACTION;
+        interrupts();
+    } else if (button_dn == BUTTON_PRESSED && cur_time - button_dn_time > BUTTON_PRESS_TIME) {
+        state = BUTTONS_DN_PRESS;
+        noInterrupts();
+        dn_button_state = BUTTON_NO_ACTION;
+        interrupts();
+    }
 
     return state;
 }
@@ -621,8 +617,8 @@ bool heat(byte max_temp, int profile_index) {
         }
 
         // Measure Values
-        // TODO(HEIDT) getting the temperature from the digital sensors is by far the slowest part of this loop.
-        // figure out an approach that allows control faster than sensing
+        // TODO(HEIDT) getting the temperature from the digital sensors is by far the slowest part
+        // of this loop. figure out an approach that allows control faster than sensing
         t = getTemp();
         v = getVolts();
         float max_possible_amperage = v / bed_resistance;
@@ -835,14 +831,14 @@ float getTemp() {
     for (byte i = 0; i < 100; i++) { // Poll TEMP_PIN reading 100 times
         t = t + analogRead(TEMP_PIN);
     }
-    t /= 100.0;  // average
-    t *= 1.5/1024.0; // voltage
+    t /= 100.0;        // average
+    t *= 1.5 / 1024.0; // voltage
     // conversion to temp, consult datasheet:
     // https://www.ti.com/document-viewer/LMT85/datasheet/detailed-description#snis1681040
     // this is optimized for 25C to 150C
     // TODO(HEIDT) this is linearized and innacurate, could probably use the nonlinear
     // functions without much overhead.
-    t = (t - 1.365)/((.301 - 1.365)/(150.0-25.0)) + 20.0;
+    t = (t - 1.365) / ((.301 - 1.365) / (150.0 - 25.0)) + 20.0;
     debugprint(t);
     debugprint(" ");
 
@@ -865,7 +861,7 @@ float getVolts() {
     }
     v /= 20;
 
-    float vin = (v / 1023.0)*1.5;
+    float vin = (v / 1023.0) * 1.5;
     debugprint("voltage at term: ");
     debugprintln(vin);
     vin = (vin / 0.090981) + 0.3;
