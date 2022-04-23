@@ -74,7 +74,12 @@ byte max_temp_index = 0;
 #define MAX_RESISTANCE 10.0
 float bed_resistance = 0.9;
 #define MAX_AMPERAGE 5.0
-#define PWM_VOLTAGE_SCALAR 5.0
+#define PWM_VOLTAGE_SCALAR 1.0
+
+// These values were derived using a regression from real world data.
+// See the jupyter notebooks for more detail
+#define ANALOG_APPROXIMATION_SCALAR 1.752
+#define ANALOG_APPROXIMATION_OFFSET -20.517
 
 // EEPROM storage locations
 #define CRC_ADDR 0
@@ -84,8 +89,8 @@ float bed_resistance = 0.9;
 #define DIGITAL_TEMP_ID_ADDR 10
 
 // Voltage Measurement Info
-float vConvert = 52.00;
-float vMin = 10.50;
+#define VOLTAGE_REFERENCE 1.5
+
 
 // Solder Reflow Plate Logo
 static const uint8_t PROGMEM logo[] = {
@@ -664,6 +669,32 @@ bool heat(byte max_temp, int profile_index) {
     }
 }
 
+void evaluate_heat() {
+    debugprintln("Starting thermal evaluation");
+    uint8_t duties[] = {255, 225, 200, 150, 100, 50, 0};
+    unsigned long runtime = 60*5;  // run each for 5 minutes
+
+    for(int i = 0; i < sizeof(duties); i++) {
+        debugprint("Running to duty of: ");
+        debugprintln(duties[i]);
+        unsigned long start_time = millis();
+        analogWrite(MOSFET_PIN, duties[i]);
+        float elapsed_time = (millis() - start_time)/1000.0;
+        while(elapsed_time < runtime) {
+            debugprint("elapsed time: ");
+            debugprintln(elapsed_time);
+            debugprint("runtime: ");
+            debugprintln(runtime);
+            elapsed_time = (millis() - start_time)/1000.0;
+            float v = getVolts();
+            float t = getTemp();
+            delay(500);
+        }
+    }
+    
+    analogWrite(MOSFET_PIN, MOSFET_PIN_OFF);
+}
+
 void stepPID(float target_temp, float current_temp, float last_temp, float dt, int min_pwm) {
     float error = target_temp - current_temp;
     float D = (current_temp - last_temp) / dt;
@@ -832,26 +863,31 @@ float getTemp() {
         t = t + analogRead(TEMP_PIN);
     }
     t /= 100.0;        // average
-    t *= 1.5 / 1024.0; // voltage
+    t *= VOLTAGE_REFERENCE / 1024.0; // voltage
     // conversion to temp, consult datasheet:
     // https://www.ti.com/document-viewer/LMT85/datasheet/detailed-description#snis1681040
     // this is optimized for 25C to 150C
     // TODO(HEIDT) this is linearized and innacurate, could probably use the nonlinear
     // functions without much overhead.
-    t = (t - 1.365) / ((.301 - 1.365) / (150.0 - 25.0)) + 20.0;
-    debugprint(t);
+    t = (t - 1.365) / ((.301 - 1.365) / (150.0 - 25.0)) + 25.0;
+
+    // The analog sensor is too far from the bed for an accurate reading
+    // this simple function estimates the true bed temperature based off the thermal
+    // gradient 
+    float estimated_temp = t*ANALOG_APPROXIMATION_SCALAR + ANALOG_APPROXIMATION_OFFSET;
+    debugprint(estimated_temp);
     debugprint(" ");
 
-    // return the maximum of all the temperature sensors for safety
     sensors.requestTemperatures();
     for (int i = 0; i < sensor_count; i++) {
         float temp_in = sensors.getTempC(temp_addresses[i]);
         debugprint(temp_in);
         debugprint(" ");
-        t = max(t, temp_in);
     }
     debugprintln();
-    return t;
+
+
+    return max(t, estimated_temp);
 }
 
 float getVolts() {
