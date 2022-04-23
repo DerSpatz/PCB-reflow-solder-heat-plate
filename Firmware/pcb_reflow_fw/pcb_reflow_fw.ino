@@ -74,7 +74,7 @@ byte max_temp_index = 0;
 #define MAX_RESISTANCE 10.0
 float bed_resistance = 0.9;
 #define MAX_AMPERAGE 5.0
-#define PWM_VOLTAGE_SCALAR 1.0
+#define PWM_VOLTAGE_SCALAR 2.0
 
 // These values were derived using a regression from real world data.
 // See the jupyter notebooks for more detail
@@ -167,7 +167,7 @@ const static solder_profile_t profiles[NUM_PROFILES] = {
 float kI = 0.2;
 float kD = 0.25;
 float kP = 8.0;
-float I_clip = 150;
+float I_clip = 220;
 float error_I = 0;
 
 // Optional temperature sensor
