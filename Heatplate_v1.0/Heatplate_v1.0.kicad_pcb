@@ -4675,7 +4675,7 @@
   (gr_line (start 110.85 78.75) (end 150.3 78.75) (layer "Edge.Cuts") (width 0.05) (tstamp ce938e59-1956-4557-8f9e-79d669e5b060))
   (gr_arc (start 97.65 78.75) (mid 99.9 81) (end 97.65 83.25) (layer "Edge.Cuts") (width 0.05) (tstamp ec473f36-dff0-4061-ad5e-da2f6bd40eaf))
   (gr_line (start 160 63.5) (end 160 156.5) (layer "Edge.Cuts") (width 0.05) (tstamp f004735a-1320-4769-8a14-f57469ce3fcb))
-  (gr_text "github.com/DerSpatz/PCB-reflow-solder-heat-plate\ndevelopment by:\nBastian Mohing (hardware)\nNathan Heidt(software)\nMerlin Shaw (testing)" (at 150 93) (layer "B.SilkS") (tstamp 16217414-750a-4faa-ac78-35a446effcc6)
+  (gr_text "github.com/DerSpatz/PCB-reflow-solder-heat-plate\ndevelopment by:\nBastian Mohing (hardware)\nNathan Heidt (software)\nMerlin Shaw (testing)" (at 150 93) (layer "B.SilkS") (tstamp 16217414-750a-4faa-ac78-35a446effcc6)
     (effects (font (size 2 1.8) (thickness 0.25)) (justify left mirror))
   )
   (gr_text "GND" (at 130.91 68.85 270) (layer "B.SilkS") (tstamp 2f93b29f-5065-46f2-a74a-a17363d3f7cd)
