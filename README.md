@@ -12,3 +12,6 @@ Board dimensions are 100 x 100 mm, and almost all parts can be sourced from LCSC
 This repository includes an interactive BOM with annotations and LCSC parts numbers.
 
 Inspiration comes from https://github.com/AfterEarthLTD/Solder-Reflow-Plate
+
+https://github.com/DerSpatz/PCB-reflow-solder-heat-plate/blob/main/Heatplate_v1.0/renders/Heatplate_v1.0_front.png
+https://github.com/DerSpatz/PCB-reflow-solder-heat-plate/blob/main/Heatplate_v1.0/renders/Heatplate_v1.0_back.png
