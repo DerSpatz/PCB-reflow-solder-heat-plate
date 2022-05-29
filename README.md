@@ -13,5 +13,5 @@ This repository includes an interactive BOM with annotations and LCSC parts numb
 
 Inspiration comes from https://github.com/AfterEarthLTD/Solder-Reflow-Plate
 
-https://github.com/DerSpatz/PCB-reflow-solder-heat-plate/blob/main/Heatplate_v1.0/renders/Heatplate_v1.0_front.png
-https://github.com/DerSpatz/PCB-reflow-solder-heat-plate/blob/main/Heatplate_v1.0/renders/Heatplate_v1.0_back.png
+![heatplate PCB front](https://github.com/DerSpatz/PCB-reflow-solder-heat-plate/blob/main/Heatplate_v1.0/renders/Heatplate_v1.0_front.png)
+![heatplate PCB back](https://github.com/DerSpatz/PCB-reflow-solder-heat-plate/blob/main/Heatplate_v1.0/renders/Heatplate_v1.0_back.png)
