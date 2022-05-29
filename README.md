@@ -17,7 +17,7 @@ Special Thanks go out to:
 
 Nathan Heidt for writing the software and testing
 
-Merlin Shaw for ordering the first batch of prototypes and testing
+Merlin Shaw (www.facebook.com/GeekIslandGaming) for ordering the first batch of prototypes and testing
 
 ![heatplate PCB front](https://github.com/DerSpatz/PCB-reflow-solder-heat-plate/blob/main/Heatplate_v1.0/renders/Heatplate_v1.0_front.png)
 ![heatplate PCB back](https://github.com/DerSpatz/PCB-reflow-solder-heat-plate/blob/main/Heatplate_v1.0/renders/Heatplate_v1.0_back.png)
