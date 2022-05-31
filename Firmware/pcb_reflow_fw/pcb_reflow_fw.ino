@@ -54,7 +54,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1); // Create Disp
 #define VCC_PIN PIN_PF4  // A0
 #define LED_GREEN_PIN PIN_PC4
 #define LED_RED_PIN PIN_PC5
-#define ONE_WIRE_BUS PIN_PE1
+#define ONE_WIRE_BUS PIN_PD5
 
 #define MOSFET_PIN_OFF 255
 
