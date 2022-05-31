@@ -1,6 +1,6 @@
 /* Solder Reflow Plate Sketch
- *  H/W - Ver 2.4
- *  S/W - Ver 1.0
+ *  H/W - Ver Spatz-1.0
+ *  S/W - Ver 0.35
  *  by Chris Halsall and Nathan Heidt     */
 
 /* To prepare
@@ -37,8 +37,8 @@
 #include <SPI.h>
 
 // Version Definitions
-static const PROGMEM float hw = 2.4;
-static const PROGMEM float sw = 2.0;
+static const PROGMEM float hw = 0.9;
+static const PROGMEM float sw = 0.15;
 
 // Screen Definitions
 #define SCREEN_WIDTH 128

@@ -24,3 +24,6 @@ build and load through the arduino IDE as normal.  Select the Atmega4809 as the 
 and make sure the correct programmer is selected.
 
 ## TODO
+
+- Needs a good amount of cleanup
+- Has a hack estimation for minimum PWM, need to find a way to improve this
