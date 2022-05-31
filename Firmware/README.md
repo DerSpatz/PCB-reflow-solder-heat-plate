@@ -25,5 +25,8 @@ and make sure the correct programmer is selected.
 
 ## TODO
 
-- Needs a good amount of cleanup
+- Needs a good amount of cleanup and refactoring
 - Has a hack estimation for minimum PWM, need to find a way to improve this
+- should switch buttons to bounce2
+- if there's no current sense, write a function to approximate resistance based on temperature
+- validate temperature estimation function is correct across multiple boards
