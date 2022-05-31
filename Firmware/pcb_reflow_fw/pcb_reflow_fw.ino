@@ -78,7 +78,7 @@ float bed_resistance = 0.9;
 
 // These values were derived using a regression from real world data.
 // See the jupyter notebooks for more detail
-#define ANALOG_APPROXIMATION_SCALAR 1.752
+#define ANALOG_APPROXIMATION_SCALAR 1.612
 #define ANALOG_APPROXIMATION_OFFSET -20.517
 
 // EEPROM storage locations
@@ -154,14 +154,14 @@ struct solder_profile_t {
 };
 
 // TODO(HEIDT) how to adjust for environments where the board starts hot or cold?
-// profiles pulled from here: https://www.7pcb.com/blog/lead-free-reflow-profile.php
+// profiles pulled from here: https://www.compuphase.com/electronics/reflowsolderprofiles.htm#_
 #define NUM_PROFILES 2
 const static solder_profile_t profiles[NUM_PROFILES] = {
-    {.points = 4, .seconds = {25, 105, 115, 155}, .fraction = {.65, .78, .81, 1.00}},
+    {.points = 4, .seconds = {90, 180, 240, 260}, .fraction = {.65, .78, 1.00, 1.00}},
     {.points = 2, .seconds = {162.0, 202.0}, .fraction = {.95, 1.00}}};
 
 // temperature must be within this range to move on to next step
-#define TARGET_TEMP_THRESHOLD 5.0
+#define TARGET_TEMP_THRESHOLD 2.5
 
 // PID values
 float kI = 0.2;
@@ -659,8 +659,8 @@ bool heat(byte max_temp, int profile_index) {
                 last_time = 0.0;
                 start_temp = t;
                 goal_temp = profiles[profile_index].fraction[current_step] * max_temp;
-                step_runtime = profiles[profile_index].fraction[current_step] -
-                               profiles[profile_index].fraction[current_step - 1];
+                step_runtime = profiles[profile_index].seconds[current_step] -
+                               profiles[profile_index].seconds[current_step - 1];
                 step_start_time = millis() / 1000.0;
             }
         }
@@ -700,7 +700,7 @@ void stepPID(float target_temp, float current_temp, float last_temp, float dt, i
     float D = (current_temp - last_temp) / dt;
 
     error_I += error * dt * kI;
-    error_I = constrain(error_I, -I_clip, I_clip);
+    error_I = constrain(error_I, 0, I_clip);
 
     // PWM is inverted so 0 duty is 100% power
     float PWM = 255.0 - (error * kP + D * kD + error_I);
@@ -709,8 +709,9 @@ void stepPID(float target_temp, float current_temp, float last_temp, float dt, i
     debugprintln("PID");
     debugprintln(dt);
     debugprintln(error);
-    debugprintln(PWM);
     debugprintln(error_I);
+    debugprint("PWM: ");
+    debugprintln(PWM);
     analogWrite(MOSFET_PIN, (int)PWM);
 }
 
