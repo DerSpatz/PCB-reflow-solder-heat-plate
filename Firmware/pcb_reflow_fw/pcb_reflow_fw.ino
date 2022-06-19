@@ -52,8 +52,8 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1); // Create Disp
 #define DNSW_PIN PIN_PD4
 #define TEMP_PIN PIN_PF2 // A2
 #define VCC_PIN PIN_PF4  // A0
-#define LED_GREEN_PIN PIN_PC4
-#define LED_RED_PIN PIN_PC5
+#define LED_GREEN_PIN PIN_PC5
+#define LED_RED_PIN PIN_PC4
 #define ONE_WIRE_BUS PIN_PD5
 
 #define MOSFET_PIN_OFF 255
@@ -72,7 +72,7 @@ volatile unsigned long down_state_change_time = 0;
 byte max_temp_array[] = {140, 150, 160, 170, 180};
 byte max_temp_index = 0;
 #define MAX_RESISTANCE 10.0
-float bed_resistance = 0.9;
+float bed_resistance = 1.88;
 #define MAX_AMPERAGE 5.0
 #define PWM_VOLTAGE_SCALAR 2.0
 
@@ -359,7 +359,7 @@ inline void doSetup() {
 }
 
 inline void getResistanceFromUser() {
-    float resistance = 0.9;
+    float resistance = 1.88;
     while (1) {
         clearMainMenu();
         display.setCursor(3, 4);
@@ -371,9 +371,9 @@ inline void getResistanceFromUser() {
         display.print(F("BOTH: choose"));
         buttons_state_t button = getButtonsState();
         if (button == BUTTONS_UP_PRESS) {
-            resistance += 0.1;
+            resistance += 0.01;
         } else if (button == BUTTONS_DN_PRESS) {
-            resistance -= 0.1;
+            resistance -= 0.01;
         } else if (button == BUTTONS_BOTH_PRESS) {
             setResistance(resistance);
             return;
