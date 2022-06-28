@@ -52,6 +52,8 @@ Daniel Oltmanns (https://github.com/oltdaniel) is doing a rework of the firmware
 - better working buttons
 - calibration function for the analog temperature sensor by taping a digital probe directly to the heat plate
 
+Please note that I can only do hardware design, so I can't contribute anything to the software. 
+
 ### Programming the MCU
 
 The MCU can be programmed with JTAG2UPDI (https://github.com/ElTangas/jtag2updi). For programming, you need an Arduino with ATMEGA328p (Uno or Nano), some wires, a 4.7k resistor and  a 10µF capacitor or 120 Ohm resistor to disable the auto-reset.
