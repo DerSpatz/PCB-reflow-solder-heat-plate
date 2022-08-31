@@ -1487,11 +1487,11 @@
         )
       )
     )
-    (symbol "User:Q_NMOS_SSSGDDDD" (pin_names (offset 0) hide) (in_bom yes) (on_board yes)
+    (symbol "User:Q_PMOS_SSSGDDDD" (pin_names (offset 0) hide) (in_bom yes) (on_board yes)
       (property "Reference" "Q" (id 0) (at 5.08 1.27 0)
         (effects (font (size 1.27 1.27)) (justify left))
       )
-      (property "Value" "Q_NMOS_SSSGDDDD" (id 1) (at 5.08 -1.27 0)
+      (property "Value" "Q_PMOS_SSSGDDDD" (id 1) (at 5.08 -1.27 0)
         (effects (font (size 1.27 1.27)) (justify left))
       )
       (property "Footprint" "" (id 2) (at 5.08 2.54 0)
@@ -1506,7 +1506,7 @@
       (property "ki_description" "N-MOSFET transistor, drain/gate/source" (id 5) (at 0 0 0)
         (effects (font (size 1.27 1.27)) hide)
       )
-      (symbol "Q_NMOS_SSSGDDDD_0_1"
+      (symbol "Q_PMOS_SSSGDDDD_0_1"
         (polyline
           (pts
             (xy 0.254 0)
@@ -1576,10 +1576,10 @@
         )
         (polyline
           (pts
-            (xy 1.016 0)
-            (xy 2.032 0.381)
-            (xy 2.032 -0.381)
-            (xy 1.016 0)
+            (xy 2.159 0)
+            (xy 1.143 -0.381)
+            (xy 1.143 0.381)
+            (xy 2.159 0)
           )
           (stroke (width 0) (type default) (color 0 0 0 0))
           (fill (type outline))
@@ -1617,7 +1617,7 @@
           (fill (type outline))
         )
       )
-      (symbol "Q_NMOS_SSSGDDDD_1_1"
+      (symbol "Q_PMOS_SSSGDDDD_1_1"
         (pin passive line (at 2.54 -5.08 90) (length 2.54) hide
           (name "S" (effects (font (size 1.27 1.27))))
           (number "1" (effects (font (size 1.27 1.27))))
@@ -2902,7 +2902,7 @@
     (pin "4" (uuid 69e23c45-67cf-44d6-ae9f-beb86c963c75))
   )
 
-  (symbol (lib_id "User:Q_NMOS_SSSGDDDD") (at 63.5 39.37 90) (unit 1)
+  (symbol (lib_id "User:Q_PMOS_SSSGDDDD") (at 63.5 39.37 90) (unit 1)
     (in_bom yes) (on_board yes) (fields_autoplaced)
     (uuid 218aff33-08dd-41b4-a6f6-da4b34f566cc)
     (property "Reference" "Q1" (id 0) (at 63.5 29.21 90))
