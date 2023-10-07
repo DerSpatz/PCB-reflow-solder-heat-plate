@@ -6,7 +6,7 @@ The PCB reflow solder heat plate can be used to solder small PCBs with SMD parts
 
 ## Hardware design
 
-The idea for this design comes from https://github.com/AfterEarthLTD/Solder-Reflow-Plate. But when I checked the original design, I found some issues that could cause safety problems and other design choices that are not optimal.
+The idea for this design comes from https://github.com/AfterEarthLTD/Solder-Reflow-Plate. But when I checked the original design, I found some issues that could cause safety problems and other design choices that are not optimal. Brettski74 recommends this project now it seems, but is still improving on that original design and software at https://github.com/brettski74/Solder-Reflow-Plate if anyone has an 'original' design already assembled that they want to get a bit more functionality out of.
 
 ### Feature list
 
