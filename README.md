@@ -72,6 +72,8 @@ JCM from the Discord explained the process pretty good:
 > 10. Temporarily disable auto reset for the Arduino Nano: https://playground.arduino.cc/Main/DisablingAutoResetOnSerialConnection/ (not sure if it's needed for the Nano, it was for my Mega)
 > 11. Select Sketch > Upload using Programmer (normal Upload will not work)
 
+And Platima Tinkers made a video walkthrough of this process for more visual learners [which you can find here](https://www.youtube.com/watch?v=X7ZnNdqaL4c).
+
 ## Thanks
 
 Special Thanks go out to:
